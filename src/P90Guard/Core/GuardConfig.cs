@@ -75,6 +75,47 @@ namespace P90Guard.Core
         public bool DestroyExplodedGrenades { get; set; } = true;
         /// <summary>Same bug for landmines: destroy the mine on the server after it explodes; ignore repeated triggers.</summary>
         public bool DestroyExplodedLandmines { get; set; } = true;
+        /// <summary>
+        /// Client bug: after death the client may still think a grenade/medkit is in hand, and a mouse click (a spectator
+        /// switching the camera) sends "throw grenade" / "heal". The server executed it - grenades appeared from nowhere.
+        /// Silently ignore these commands from dead players and spectators (not counted as a detection).
+        /// </summary>
+        public bool BlockSpectatorItemUse { get; set; } = true;
+    }
+
+    public enum NetworkAction { Log, NotifyAdmins, Kick, Ban }
+
+    public sealed class NetworkConfig
+    {
+        /// <summary>
+        /// Shared cheater database (the FLX network by default): admins report cheaters with "pg cheatban", every server
+        /// in the network sees them on join. Works only with an ApiKey from the network owner. What is sent: the SteamID
+        /// of every joining player (lookup), and for "pg cheatban" bans - SteamID, nick, reason, duration, server name
+        /// and the player's recent anti-cheat lines. Set to false to keep everything local even with a key.
+        /// </summary>
+        public bool Enabled { get; set; } = true;
+        public string Url { get; set; } = "https://flx-scp-project-90.ru/api/guard/v1";
+        /// <summary>Key of this server, issued by the network owner. Empty = not connected, nothing is sent.</summary>
+        public string ApiKey { get; set; } = "";
+        /// <summary>Send this server's "pg cheatban" bans to the network.</summary>
+        public bool ShareBans { get; set; } = true;
+        /// <summary>Check every joining player against the network.</summary>
+        public bool CheckOnJoin { get; set; } = true;
+        /// <summary>
+        /// What to do when a joining player has reports from other servers:
+        /// Log - console/log/webhook only; NotifyAdmins - also a message to admins on the server;
+        /// Kick / Ban - only if the reports come from at least ActionMinServers different servers (otherwise NotifyAdmins).
+        /// </summary>
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public NetworkAction OnReportedJoin { get; set; } = NetworkAction.NotifyAdmins;
+        public int ActionMinServers { get; set; } = 2;
+        /// <summary>Ban length for OnReportedJoin = Ban (minutes, 0 = permanent).</summary>
+        public int ActionBanMinutes { get; set; } = 1440;
+        /// <summary>How many recent anti-cheat lines of the player to attach to a report as evidence.</summary>
+        public int EvidenceLines { get; set; } = 15;
+        public int TimeoutSeconds { get; set; } = 8;
+        /// <summary>Re-check the same SteamID not more often than this.</summary>
+        public int CacheMinutes { get; set; } = 10;
     }
 
     public sealed class MessagesConfig
@@ -83,6 +124,8 @@ namespace P90Guard.Core
         public string Kick { get; set; } = "Anti-cheat: kicked ({reason})";
         public string Ban { get; set; } = "Anti-cheat: banned until {until} ({reason})";
         public string BanPermanent { get; set; } = "Anti-cheat: permanently banned ({reason})";
+        /// <summary>In-game message to admins when a reported player joins.</summary>
+        public string NetworkAdminNotice { get; set; } = "<color=#E5484D>P90Guard</color>: {nick} has cheat reports from {servers} server(s): {reasons}";
     }
 
     public sealed class GuardConfig
@@ -117,6 +160,7 @@ namespace P90Guard.Core
         public LandmineConfig Landmine { get; set; } = new();
         public CuffConfig Cuff { get; set; } = new();
         public FixesConfig Fixes { get; set; } = new();
+        public NetworkConfig Network { get; set; } = new();
         public MessagesConfig Messages { get; set; } = new();
         /// <summary>Harmony patch class names not to install (troubleshooting).</summary>
         public List<string> DisabledPatches { get; set; } = new();
@@ -167,7 +211,7 @@ namespace P90Guard.Core
             c.Checks = c.Checks == null ? new(StringComparer.OrdinalIgnoreCase) : new(c.Checks, StringComparer.OrdinalIgnoreCase);
             foreach (var kv in DefaultChecks)
                 if (!c.Checks.ContainsKey(kv.Key)) c.Checks[kv.Key] = new CheckConfig(kv.Value.Mode, kv.Value.Points, kv.Value.InstantKick);
-            c.Punishments ??= new(); c.Webhook ??= new(); c.Landmine ??= new(); c.Cuff ??= new(); c.Fixes ??= new(); c.Messages ??= new();
+            c.Punishments ??= new(); c.Webhook ??= new(); c.Landmine ??= new(); c.Cuff ??= new(); c.Fixes ??= new(); c.Messages ??= new(); c.Network ??= new();
             c.AllowedGameHashes ??= new(); c.ExemptSteamIds ??= new(); c.DisabledPatches ??= new();
             return c;
         }

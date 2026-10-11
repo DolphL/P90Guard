@@ -121,6 +121,9 @@ namespace P90Guard.Core
 
         public int RoleId { get { try { return Ccm.curClass; } catch { return -1; } } }
 
+        /// <summary>Dead or a spectator (role 1 "Spectator Class").</summary>
+        public bool IsDeadOrSpectator { get { try { return Stats.isDead || Ccm.curClass == 1; } catch { return false; } } }
+
         public Class RoleClass
         {
             get

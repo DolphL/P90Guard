@@ -9,10 +9,11 @@ The game trusts the client with many network commands: giving items, setting HP,
 - Standalone: depends only on BepInEx and the game. Works next to any other plugin framework.
 - Every check can be set to `Off`, `Log` or `Block` separately.
 - Optional points, automatic kick and ban, its own ban list, Discord or JSON webhook.
+- Shared cheater network (with a key from the network owner): cheaters banned on one server are flagged on the others.
 - Public API (events) for websites, bots and panels, usable through reflection.
-- Fixes two game bugs on dedicated servers: exploded grenades and landmines are never destroyed on the server.
+- Fixes game bugs on dedicated servers: exploded grenades and landmines are never destroyed on the server; dead players can throw grenades and heal (stale client state).
 
-> **Status: 1.0.0.** All checks are based on the game code (the exact commands a vanilla client sends and when). They were developed and run on one server. Watch the log for a few days before enabling automatic punishments.
+> **Status: 1.2.0 (beta).** All checks are based on the game code (the exact commands a vanilla client sends and when). They were developed and run on one server. Watch the log for a few days before enabling automatic punishments.
 
 ## Supported game version
 
@@ -20,7 +21,7 @@ Game names are obfuscated and change with every game update. P90Guard is mapped 
 
 | P90Guard | Game | GameAssembly.dll SHA-256 |
 |---|---|---|
-| 1.0.0 | 0.4.2 [F05] | `ba69d16edce7b6fb2362823b8d7285b9905105c648289f0f25cbccdb9973164a` |
+| 1.0.0 – 1.2.0 | 0.4.2 [F05] | `ba69d16edce7b6fb2362823b8d7285b9905105c648289f0f25cbccdb9973164a` |
 
 On start the plugin hashes `GameAssembly.dll`. On an unknown build it **does not patch anything** (with the default `GameHashCheck: "safe"`) and prints the hash to the log. That way a game update can never make the anti-cheat block the wrong commands.
 
@@ -61,7 +62,7 @@ They go to the BepInEx console and log and, with `LogToFile`, to `BepInEx/P90Gua
 | `spawn_tool` | Using the sandbox SpawnTool commands (place, delete, move, rotate, scale props) without holding the tool. Every placed prop is logged with the player name. | Block |
 | `landmine_far` | Triggering a landmine with the explosion point far from the mine (a grenade anywhere on the map). | Block |
 | `cuff_far` | Cuffing a player farther than `Cuff.MaxDistance` (the game checks it only on the client). | Log |
-| `use_missing` | Healing with a medkit or SCP-458, or throwing a grenade, without having it. | Log |
+| `use_missing` | Healing with a medkit or pills, or throwing a grenade, without having it. | Log |
 | `heal_spam` | Medkit heals faster than the heal duration allows. | Log |
 
 How the spawn checks work: every class change on the server grants the player exactly the commands a vanilla client sends for it. A spectator gets 1 position, 1 HP, 1 clear, 1 "dead", 1 delayed position. Any other class gets 1 position, 1 HP, 2 clears, 1 "alive", 2 ammo and one AddItem per loadout item. The permissions expire after 120 s. Class changes within 60 s add up, because the previous class's coroutine may still be sending. Admins and server-side plugins that run these commands themselves are not affected.
@@ -117,7 +118,8 @@ Points, bans and `ExemptSteamIds` use only the SteamID from the Steam transport,
 
   "Fixes": {
     "DestroyExplodedGrenades": true,  // set to false if another plugin already fixes it
-    "DestroyExplodedLandmines": true
+    "DestroyExplodedLandmines": true,
+    "BlockSpectatorItemUse": true     // ignore stale "throw grenade" / "heal" from dead players (client bug)
   },
 
   "Messages": {
@@ -144,6 +146,46 @@ Points, bans and `ExemptSteamIds` use only the SteamID from the Steam transport,
 1. Run with the defaults (`Punishments.Enabled: false`) for a few days and read the log.
 2. If a check fires on honest players, set it to `Log` or `Off` and open an issue with the log line.
 3. Then enable `Punishments`.
+
+## Cheater network
+
+P90Guard servers share a database of cheaters through the FLX network (flx-scp-project-90.ru).
+
+- **To join**, get a key from the network owner (FLX Discord) and put it into `Network.ApiKey` in `P90Guard.json`. The file is reloaded automatically; `pg status` shows the connection. Without a key nothing is sent.
+- **When an admin bans a cheater** with `pg cheatban`, the network gets a report: SteamID, nick, reason, duration, server name and the player's recent anti-cheat lines.
+- **When any player joins**, the server looks their SteamID up. If other servers reported them, P90Guard warns in the console, the log, the webhook and on the screen of admins on the server.
+
+**What is sent.** The SteamID of every joining player (lookup only), and the data above for `pg cheatban` bans. Nothing else: no chat, no IPs, no other bans. To disconnect, remove the key or set `"Network": { "Enabled": false }`. The console prints this notice at every start. If the network is down, the server plays normally.
+
+Console commands:
+
+| Command | What it does |
+|---|---|
+| `pg cheatban <nick\|SteamID> <minutes\|perm> <reason>` | Ban for cheating here and report to the network |
+| `pg unban <SteamID>` | Remove the ban and revoke this server's report |
+| `pg check <nick\|SteamID>` | Look the player up |
+| `pg recent` | Last 20 detections |
+| `pg status` | Plugin and network status |
+
+What happens to a reported player is your choice (`Network.OnReportedJoin`): `Log`, `NotifyAdmins` (default), `Kick`, `Ban`. Kick and Ban apply only when reports come from at least `ActionMinServers` (2) different **verified** servers, never to exempt players, and not earlier than 10 s after joining. Only the connection SteamID is used, so a spoofed SteamID cannot get someone else reported.
+
+```jsonc
+"Network": {
+  "Enabled": true,
+  "Url": "https://flx-scp-project-90.ru/api/guard/v1",
+  "ApiKey": "",               // key from the network owner
+  "ShareBans": true,          // send "pg cheatban" bans to the network
+  "CheckOnJoin": true,
+  "OnReportedJoin": "NotifyAdmins",   // Log | NotifyAdmins | Kick | Ban
+  "ActionMinServers": 2,
+  "ActionBanMinutes": 1440,
+  "EvidenceLines": 15,
+  "TimeoutSeconds": 8,
+  "CacheMinutes": 10
+}
+```
+
+Protocol (to host your own network): [docs/NETWORK_API.md](docs/NETWORK_API.md).
 
 ## Ban list
 

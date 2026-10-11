@@ -49,6 +49,7 @@ namespace P90Guard.Core
         public const string NB_SendCommandInternal = "gif";          // NetworkBehaviour.SendCommandInternal
         public const string CCM_Prop_CurClass = "mzo";               // SyncVar property Networkcurclass (setter)
         public const string Inv_Prop_Items = "nba";                  // SyncVar property Network_currentItems (setter)
+        public const string SC_HandleCommand = "bhm";                // ServerConsole: handle one console line (help/list/stop...)
 
         // ---------- Fields / calls ----------
         public static bool IsServer(this NetworkBehaviour nb) { try { return nb.nja; } catch { return false; } }   // isServer
@@ -58,6 +59,12 @@ namespace P90Guard.Core
         public static void TargetKick(this CharacterClassManager ccm, gt conn, string reason) => ccm.blq(conn, reason);
         public static Vector3 SyncedPosition(this PlayerTransformSync pts) => pts.kko;                         // last position the client reported
         public static void NetDestroy(GameObject go) => NetworkServer.hbk(go);                                 // NetworkServer.Destroy
+        /// <summary>5-second message on the screen of this player only (Scp294Cup.RpcMessage, shown to the owner).</summary>
+        public static void ShowMessage(GameObject player, string text)
+        {
+            var cup = player.GetComponent<Scp294Cup>() ?? player.GetComponentInChildren<Scp294Cup>(true);
+            cup?.cch(text ?? "");
+        }
 
         // NetworkReader position (for peeking command arguments)
         public static int GetPos(this hd r) => r.lnx;

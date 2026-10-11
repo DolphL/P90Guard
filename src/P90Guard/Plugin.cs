@@ -18,7 +18,7 @@ namespace P90Guard
     public sealed class Plugin : BasePlugin
     {
         public const string Guid = "p90guard";
-        public const string Version = "1.0.0";
+        public const string Version = "1.2.0";
 
         internal static Harmony Harmony;
 
@@ -42,6 +42,7 @@ namespace P90Guard
             if (!GameVersion.Check()) return;
 
             AddComponent<GuardTicker>();
+            Network.Announce();
 
             Harmony = new Harmony(Guid);
             var disabled = GuardConfig.Current.DisabledPatches.Select(s => s.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);

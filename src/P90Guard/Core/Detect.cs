@@ -40,6 +40,14 @@ namespace P90Guard.Core
         private static readonly Dictionary<ulong, List<(float At, int Points)>> Score = new();
         private static readonly Dictionary<ulong, List<DateTime>> Kicks = new();
         internal static readonly List<string> Recent = new();
+        /// <summary>Recent detection lines per player (by transport SteamID) - evidence for network reports.</summary>
+        private static readonly Dictionary<ulong, LinkedList<string>> ByPlayer = new();
+
+        internal static List<string> Evidence(ulong steamId, int max)
+        {
+            if (steamId == 0 || max <= 0 || !ByPlayer.TryGetValue(steamId, out var l)) return new List<string>();
+            return l.Skip(Math.Max(0, l.Count - max)).ToList();
+        }
 
         /// <summary>
         /// A check fired. Logs (rate-limited), adds points, punishes, notifies. Returns true if the command must be blocked.
@@ -78,6 +86,14 @@ namespace P90Guard.Core
                     string line = $"[P90Guard] {(block ? "BLOCKED" : "SUSPICIOUS")} {check}: {who} - {details}{(r.Count > 1 ? $" (x{r.Count})" : "")}{(grace ? " [join grace]" : "")}";
                     GuardLog.Detection(line);
                     lock (Recent) { Recent.Add($"{DateTime.Now:HH:mm:ss} {line}"); if (Recent.Count > 200) Recent.RemoveAt(0); }
+                    ulong tid = p?.TransportSteamId ?? 0;
+                    if (tid != 0)
+                    {
+                        if (!ByPlayer.TryGetValue(tid, out var pl)) ByPlayer[tid] = pl = new LinkedList<string>();
+                        pl.AddLast($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC {(block ? "BLOCKED" : "SUSPICIOUS")} {check}: {details}{(r.Count > 1 ? $" (x{r.Count})" : "")}");
+                        while (pl.Count > 50) pl.RemoveFirst();
+                        if (ByPlayer.Count > 2000) ByPlayer.Clear();
+                    }
                     Api.RaiseFlagged(p, check, details, block, r.Count, nickFallback);
                     if (block || !cfg.Webhook.OnlyBlockedAndPunishments)
                         Webhook.Send($"{(block ? "Blocked" : "Suspicious")}: {check}", $"{who}\n{details}", block ? 0xE5484D : 0xF5A524);

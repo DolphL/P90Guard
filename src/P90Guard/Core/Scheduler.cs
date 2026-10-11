@@ -35,12 +35,14 @@ namespace P90Guard.Core
         private void Update()
         {
             try { Scheduler.Tick(); } catch { }
+            try { Network.Drain(); } catch { }
             try { SpawnTracker.Tick(); } catch { }
             float now = Time.realtimeSinceStartup;
             if (now < _nextSlow) return;
             _nextSlow = now + 2f;
             try { GuardConfig.ReloadIfChanged(); } catch { }
             try { Bans.Tick(); } catch { }
+            try { Network.Tick(); } catch { }
         }
     }
 }

@@ -160,12 +160,30 @@ namespace P90Guard.Patches
     //  Consumables used without the item (report only by default)
     // =====================================================================================
 
+    /// <summary>Fixes.BlockSpectatorItemUse: a dead player / spectator sends a stale "throw" / "heal" (client bug).</summary>
+    internal static class DeadUse
+    {
+        internal static bool Blocked(NetworkBehaviour a, gu c, string what)
+        {
+            try
+            {
+                if (!Application.isBatchMode || Detect.InServerOrigin || !GuardConfig.Current.Fixes.BlockSpectatorItemUse) return false;
+                var p = GPlayer.FromConn(c) ?? GPlayer.FromBehaviour(a);
+                if (p == null || !p.IsDeadOrSpectator) return false;
+                GuardLog.Debug($"[DeadUse] {p} is dead/spectator - \"{what}\" ignored (stale client state)");
+                return true;
+            }
+            catch { return false; }
+        }
+    }
+
     /// <summary>Medkit.HealMe: the game may remove the medkit by a separate command first — allow "recently had it".</summary>
     [HarmonyPatch(typeof(Medkit), G.Medkit_InvokeHealMe)]
     internal static class MedkitUse
     {
         private static bool Prefix(NetworkBehaviour a, gu c)
         {
+            if (DeadUse.Blocked(a, c, "heal")) return false;
             try
             {
                 var p = Detect.Sender(a, c);
@@ -174,36 +192,24 @@ namespace P90Guard.Patches
                 if (m == null) return true;
                 float since = SpawnTracker.SinceLastHeal(p);
                 bool has = p.HasItem(m.medkitID) || SpawnTracker.ItemGoneRecently(p, m.medkitID, Math.Max(15f, m.healDuration + 10f));
-                if (!has) return !Detect.Hit(p, "use_missing", "healed with a medkit that is not in the inventory");
-                if (since < Math.Max(1f, m.healDuration * 0.5f)) return !Detect.Hit(p, "heal_spam", $"medkit heals too often: {since:0.0} s apart (a heal lasts {m.healDuration:0.#} s)");
+                // the player has TWO Medkit components: Medkit (5) and Pills (44) - everything is checked by this item's own ID
+                if (!has) return !Detect.Hit(p, "use_missing", $"healed with \"{Items.Name(m.medkitID)}\" that is not in the inventory");
+                if (since < Math.Max(1f, m.healDuration * 0.5f)) return !Detect.Hit(p, "heal_spam", $"\"{Items.Name(m.medkitID)}\" heals too often: {since:0.0} s apart (a heal lasts {m.healDuration:0.#} s)");
                 return true;
             }
             catch { return true; }
         }
     }
 
-    [HarmonyPatch(typeof(Scp458Item), G.Scp458_InvokeHealMe)]
-    internal static class Scp458Use
-    {
-        private static bool Prefix(NetworkBehaviour a, gu c)
-        {
-            try
-            {
-                var p = Detect.Sender(a, c);
-                if (p == null) return true;
-                var it = a.TryCast<Scp458Item>();
-                if (it == null || p.HasItem(it.kny) || SpawnTracker.ItemGoneRecently(p, it.kny, 10f)) return true;
-                return !Detect.Hit(p, "use_missing", "ate SCP-458 that is not in the inventory");
-            }
-            catch { return true; }
-        }
-    }
+    // SCP-458: no check on purpose. The item it would be compared with (a private runtime field) is not stored in the
+    // prefab, so "has the pizza" cannot be checked reliably. The server itself removes the held item and heals only 13 HP.
 
     [HarmonyPatch(typeof(GrenadeManager), G.GM_InvokeSpawnGrenade)]
     internal static class GrenadeThrow
     {
         private static bool Prefix(NetworkBehaviour a, gu c)
         {
+            if (DeadUse.Blocked(a, c, "throw grenade")) return false;
             try
             {
                 var p = Detect.Sender(a, c);

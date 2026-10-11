@@ -44,11 +44,21 @@ namespace P90Guard
             }
         }
 
-        internal static void RaisePunished(GPlayer p, string action, string reason)
+        /// <summary>
+        /// Run a console command of P90Guard without the "pg" prefix (e.g. "cheatban 7656... perm aimbot") and get the
+        /// text it printed. For web panels / other frameworks whose console does not reach the game console.
+        /// Call on the main thread. Network results arrive later and are written to the log.
+        /// </summary>
+        public static string RunCommand(string args) => Patches.ConsoleCommands.RunCaptured(args);
+
+        internal static void RaisePunished(GPlayer p, string action, string reason) =>
+            RaisePunished(p, p?.SteamId ?? 0UL, p?.Nick, action, reason);
+
+        internal static void RaisePunished(GPlayer p, ulong steamId, string nick, string action, string reason)
         {
             var h = Punished;
             if (h == null) return;
-            var d = new Dictionary<string, object> { ["steam_id"] = p?.SteamId ?? 0UL, ["nick"] = p?.Nick, ["action"] = action, ["reason"] = reason };
+            var d = new Dictionary<string, object> { ["steam_id"] = p?.SteamId ?? steamId, ["nick"] = p?.Nick ?? nick, ["action"] = action, ["reason"] = reason };
             foreach (Action<IReadOnlyDictionary<string, object>> f in h.GetInvocationList())
             {
                 try { f(d); } catch (Exception e) { GuardLog.Warn($"Api.Punished handler: {e.Message}"); }

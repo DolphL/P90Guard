@@ -77,6 +77,16 @@ namespace P90Guard.Core
             return until ?? DateTime.MaxValue;
         }
 
+        /// <summary>Remove a ban. Returns false if there was none.</summary>
+        public static bool Remove(ulong steamId)
+        {
+            ReloadIfChanged();
+            var id = steamId.ToString();
+            int n = _list.RemoveAll(b => b.SteamId == id);
+            if (n > 0) Save();
+            return n > 0;
+        }
+
         public static BanEntry Find(ulong steamId)
         {
             if (steamId == 0) return null;
