@@ -1,0 +1,32 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      Path to the game folder (default: ./libs, a copy of the game folder layout) with BepInEx 6 (IL2CPP) installed and run once (so BepInEx/interop exists).
+      Override: dotnet build -c Release -p:GameDir="D:\Steam\steamapps\common\SCP Project 90"
+    -->
+    <GameDir Condition="'$(GameDir)' == ''">$(MSBuildThisFileDirectory)libs</GameDir>
+    <BepInExCore>$(GameDir)\BepInEx\core</BepInExCore>
+    <Interop>$(GameDir)\BepInEx\interop</Interop>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS1591;CS8632</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="$(BepInExCore)\BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(BepInExCore)\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(BepInExCore)\0Harmony.dll" Private="false" />
+    <Reference Include="$(BepInExCore)\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(BepInExCore)\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(Interop)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="$(Interop)\Mirror.dll" Private="false" />
+    <Reference Include="$(Interop)\Mirror.Components.dll" Private="false" />
+    <Reference Include="$(Interop)\Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="$(Interop)\Il2CppSystem.dll" Private="false" />
+    <Reference Include="$(Interop)\UnityEngine.dll" Private="false" />
+    <Reference Include="$(Interop)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(Interop)\UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="$(Interop)\com.rlabrecque.steamworks.net.dll" Private="false" />
+  </ItemGroup>
+</Project>
